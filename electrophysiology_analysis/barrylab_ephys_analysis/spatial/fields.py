@@ -291,6 +291,36 @@ def extract_fields_from_field_candidates(field_candidates, secondary_filter_kwar
 
     return field_ratemaps
 
+def place_fields_array(rate_map, bin_area_cm2=16, min_area_cm2=200, threshold_std=1.2):
+    """
+    Place field dection method of the paper "Dorsal CA1 hippocampal place cells form a multi-scale representation of megaspace".
+    It returns a list of individual fields detected from the input rate_map.
+    """
+    mean_rate = np.mean(rate_map)
+    std_rate = np.std(rate_map)
+
+    # threshold = mean_rate + threshold_std * std_rate
+    # Handle case where std_rate is zero or very small to avoid issues
+    if std_rate < 1e-9:
+        threshold = mean_rate
+    else:
+        threshold = mean_rate + threshold_std * std_rate
+
+    threshold = max(threshold, 0)  # Example: Ensure threshold is at least 0
+
+    binary_mask = rate_map > threshold
+    labeled = label(binary_mask, connectivity=1)
+    regions = regionprops(labeled, intensity_image=rate_map)
+
+    fields = []
+    for region in regions:
+        area_cm2 = region.area * bin_area_cm2
+        if area_cm2 > min_area_cm2:
+            mask = (labeled == region.label)
+            field_map = np.where(mask, rate_map, 0.0)
+            fields.append(field_map)
+    # return np.array(fields)
+    return fields
 
 def detect_fields(ratemap, stability_ratemaps, base_threshold, threshold_step,
                   primary_filter_kwargs, secondary_filter_kwargs):
@@ -328,12 +358,27 @@ def detect_fields(ratemap, stability_ratemaps, base_threshold, threshold_step,
     ratemap[np.isnan(ratemap)] = 0
 
     # Detect field candidates and extract those that pass all filters
-    field_candidates = detect_field_candidates(ratemap, base_threshold, threshold_step, primary_filter_kwargs)
-    field_ratemaps = extract_fields_from_field_candidates(field_candidates, secondary_filter_kwargs)
+    # field_candidates = detect_field_candidates(ratemap, base_threshold, threshold_step, primary_filter_kwargs)
+    # field_ratemaps = extract_fields_from_field_candidates(field_candidates, secondary_filter_kwargs)
+    field_ratemaps_zero = place_fields_array(ratemap)
 
     # Set field_ratemap values of 0 to numpy.nan to indicate outside of field areas
-    for i, field_ratemap in enumerate(field_ratemaps):
-        field_ratemaps[i][field_ratemap == 0] = np.nan
+    # for i, field_ratemap in enumerate(field_ratemaps):
+    #     field_ratemaps[i][field_ratemap == 0] = np.nan
+    # return field_ratemaps
+
+    field_ratemaps = []
+    for field_map in field_ratemaps_zero:
+        # Ensure the field map is float64
+        field_map_float = field_map.astype(np.float64,copy=False)
+
+        # Create a copy to modify
+        field_map_nan = field_map_float.copy()
+
+        # Set values outside the field (which are 0.0) to np.nan
+        field_map_nan[field_map_nan == 0.0] = np.nan
+
+        field_ratemaps.append(field_map_nan)
 
     return field_ratemaps
 
