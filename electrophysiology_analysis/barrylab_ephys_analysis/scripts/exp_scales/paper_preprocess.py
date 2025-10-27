@@ -427,6 +427,10 @@ def assign_unit_categories_if_not_available(recordings=None, fpaths=None, recomp
                 np.nanmax([unit['analysis']['spatial_ratemaps']['spike_rates_halves']['stability']
                            for unit in recordings_unit if not (unit is None)])
 
+            max_spatial_information_content = \
+                np.nanmax([unit['analysis']['spatial_ratemaps']['spatial_information_content']
+                           for unit in recordings_unit if not (unit is None)])
+
             pc_criteria = Params.place_cell_criteria
             in_criteria = Params.interneuron_criteria
 
@@ -434,15 +438,20 @@ def assign_unit_categories_if_not_available(recordings=None, fpaths=None, recomp
 
                 category = 'noise'
 
+            # elif (
+            #         waveform_properties['peak_to_trough'][i_max_amp] >= pc_criteria['min_peak_to_trough']
+            #         and waveform_properties['half_width'][i_max_amp] >= pc_criteria['min_half_width']
+            #         and max_stability_minutes >= pc_criteria['min_stability_minutes']
+            #         and max_stability_halves >= pc_criteria['min_stability_halves']
+            #         and (sum(recordings.df_fields['animal_unit'] == i_recording_unit)
+            #              >= pc_criteria['min_number_of_fields'])
+            #         and recordings.mean_firing_rate_of_unit(i_recording_unit) <= pc_criteria['max_mean_firing_rate']
+            #         and waveform_properties['trough_ratio'][i_max_amp] >= pc_criteria['min_trough_ratio']
+            # ):
             elif (
-                    waveform_properties['peak_to_trough'][i_max_amp] >= pc_criteria['min_peak_to_trough']
-                    and waveform_properties['half_width'][i_max_amp] >= pc_criteria['min_half_width']
-                    and max_stability_minutes >= pc_criteria['min_stability_minutes']
-                    and max_stability_halves >= pc_criteria['min_stability_halves']
-                    and (sum(recordings.df_fields['animal_unit'] == i_recording_unit)
-                         >= pc_criteria['min_number_of_fields'])
-                    and recordings.mean_firing_rate_of_unit(i_recording_unit) <= pc_criteria['max_mean_firing_rate']
-                    and waveform_properties['trough_ratio'][i_max_amp] >= pc_criteria['min_trough_ratio']
+                    recordings.mean_firing_rate_of_unit(i_recording_unit) > 0.1
+                    and recordings.mean_firing_rate_of_unit(i_recording_unit) < 5
+                    and max_spatial_information_content > 0.5
             ):
 
                 category = 'place_cell'
