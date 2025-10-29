@@ -4,7 +4,7 @@ from copy import deepcopy
 import numpy as np
 from scipy import ndimage
 import cv2 as cv
-from skimage.measure import regionprops
+from skimage.measure import regionprops, label
 
 from barrylab_ephys_analysis.spatial.similarity import spatial_correlation
 
