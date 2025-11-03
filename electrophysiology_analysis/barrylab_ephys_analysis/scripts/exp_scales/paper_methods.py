@@ -142,10 +142,10 @@ def cut_df_rows_by_distance_to_wall(df, bin_width, environment_column='environme
         }
     else:
         max_bin_centers = {
-            'A': (87.5 / 2. // bin_width) * bin_width - bin_width / 2.,
-            'B': (125 / 2. // bin_width) * bin_width - bin_width / 2.,
-            'C': (175 / 2. // bin_width) * bin_width - bin_width / 2.,
-            'D': (250 / 2. // bin_width) * bin_width - bin_width / 2.,
+            'A': (87.5 / 2. // bin_width) * bin_width - bin_width / 2., # 12.5
+            'B': (125 / 2. // bin_width) * bin_width - bin_width / 2., # 37.5
+            'C': (175 / 2. // bin_width) * bin_width - bin_width / 2., # 62.5
+            'D': (250 / 2. // bin_width) * bin_width - bin_width / 2., # 112.5
             'A*': (87.5 / 2. // bin_width) * bin_width - bin_width / 2.,
             "A'": (87.5 / 2. // bin_width) * bin_width - bin_width / 2.
         }
@@ -1255,12 +1255,23 @@ class ValueByBinnedDistancePlot(ValueByBinnedMeasurePlot):
         distance_bin_edges = np.arange(0, df[distance_column_name].max() + 0.00001,
                                        distance_bin_width)
         distance_bin_centers = distance_bin_edges[:-1] + distance_bin_width / 2.
-        df[distance_column_name] = np.array(pd.cut(df[distance_column_name],
-                                                   distance_bin_edges, labels=distance_bin_centers))
-        df.drop(df.index[np.isnan(df[distance_column_name])], inplace=True)
 
-        cut_df_rows_by_distance_to_wall(df, distance_bin_width, distance_column=distance_column_name,
-                                        environment_column=environment_column)
+        # modify values bigger than bin_edges as next bin center, not np.nan
+        original_nan_mask = df[distance_column_name].isna()
+        binned_data = pd.cut(df[distance_column_name],
+                             distance_bin_edges, labels=distance_bin_centers)
+        new_nan_mask = binned_data.isna()
+        created_nan_mask = new_nan_mask & ~original_nan_mask
+        df[distance_column_name] = binned_data.astype(np.float)
+        df.loc[created_nan_mask, distance_column_name] = distance_bin_centers.max() + distance_bin_width
+        df.drop(df.index[original_nan_mask], inplace=True)
+
+        # df[distance_column_name] = np.array(pd.cut(df[distance_column_name],
+        #                                            distance_bin_edges, labels=distance_bin_centers))
+        # df.drop(df.index[np.isnan(df[distance_column_name])], inplace=True)
+
+        # cut_df_rows_by_distance_to_wall(df, distance_bin_width, distance_column=distance_column_name,
+        #                                 environment_column=environment_column)
         if distance_bin_width % 2 == 0:
             df[distance_column_name] = df[distance_column_name].astype(np.int16)
 

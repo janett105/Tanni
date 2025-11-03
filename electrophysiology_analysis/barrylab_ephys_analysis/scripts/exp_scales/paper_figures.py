@@ -2365,6 +2365,13 @@ class BinnedByDistancePlots:
         ax.set_xticks(bin_edges)
         ax.set_xlim((bin_edges[0], bin_edges[-1]))
 
+        tick_labels = [str(int(pos)) for pos in bin_edges]
+
+        if len(tick_labels) > 0:
+            tick_labels[-1] = 'c'
+
+        ax.set_xticklabels(tick_labels)
+
         if yscale is not None:
             ax.set_yscale(yscale)
 
@@ -2528,6 +2535,11 @@ class FieldDensity:
             current_distance = current_distance + FieldDensity.bin_size
             large_shape = small_shape
 
+        # add area: center of environment
+        final_area = np.prod(large_shape)
+        if final_area > 0:
+            areas[current_distance] = final_area / (10 ** 4)
+
         return areas
 
     @staticmethod
@@ -2537,7 +2549,7 @@ class FieldDensity:
         distance_bin_areas = FieldDensity.compute_environment_wall_distance_bin_areas(experiment_id)
         ValueByBinnedDistancePlot.bin_distance_values(df, 'peak_nearest_wall', FieldDensity.bin_size,
                                                       environment_column='experiment_id')
-        df.drop(index=df.loc[df['peak_nearest_wall'] > FieldDensity.max_bin_center].index, inplace=True)
+        # df.drop(index=df.loc[df['peak_nearest_wall'] > FieldDensity.max_bin_center].index, inplace=True)
         df['count'] = 1
         df = df.groupby(['experiment_id', 'animal', 'peak_nearest_wall']).sum().reset_index()
         df['area'] = [distance_bin_areas[distance_bin] for distance_bin in df['peak_nearest_wall'].values]
@@ -2899,7 +2911,7 @@ class FieldSize(object):
         # df['value'] = np.log10(df['value'])
 
         ValueByBinnedDistancePlot.bin_distance_values(df, 'distance to wall (cm)', FieldDensity.bin_size)
-        df.drop(index=df.loc[df['distance to wall (cm)'] > FieldDensity.max_bin_center].index, inplace=True)
+        # df.drop(index=df.loc[df['distance to wall (cm)'] > FieldDensity.max_bin_center].index, inplace=True)
 
         df = df[['animal', 'environment', 'distance to wall (cm)', 'value']]
 
@@ -4378,69 +4390,72 @@ def link_df_units_and_df_fields_with_common_unit(df_units, df_fields):
 
 def main(fpath):
 
-    all_recordings = load_data_preprocessed_if_available(fpath, recompute=False, verbose=True)
 
-    # Rename experiment name in  last recording so it would not have the same as the first
-    for recordings in all_recordings:
-        snippets.rename_last_recording_a2(recordings)
-
-    for recordings in all_recordings:
-        create_df_fields_for_recordings(recordings)
-
-    for recordings in all_recordings:
-        create_unit_data_frames_for_recordings(recordings)
-
-    df_fields = get_full_df_fields(all_recordings)
-    df_units = get_full_df_units(all_recordings)
-    link_df_units_and_df_fields_with_common_unit(df_units, df_fields)
-
-    df_fields.to_pickle(os.path.join(fpath, Params.analysis_path, 'df_fields.p'))
-    df_units.to_pickle(os.path.join(fpath, Params.analysis_path, 'df_units.p'))
-
-    with open(os.path.join(fpath, 'Analysis', 'all_recordings.p'), 'wb') as pfile:
-        pickle.dump(all_recordings, pfile)
-
-    # # Use this instead if data has already been loaded once
-    # with open(os.path.join(fpath, 'Analysis', 'all_recordings.p'), 'rb') as pfile:
-    #     all_recordings = pickle.load(pfile)
+    # all_recordings = load_data_preprocessed_if_available(fpath, recompute=False, verbose=True)
     #
-    # df_units = pd.read_pickle(os.path.join(fpath, 'Analysis', 'df_units.p'))
-    # df_fields = pd.read_pickle(os.path.join(fpath, 'Analysis', 'df_fields.p'))
+    # # Rename experiment name in  last recording so it would not have the same as the first
+    # for recordings in all_recordings:
+    #     snippets.rename_last_recording_a2(recordings)
+    #
+    # for recordings in all_recordings:
+    #     create_df_fields_for_recordings(recordings)
+    #
+    # for recordings in all_recordings:
+    #     create_unit_data_frames_for_recordings(recordings)
+    #
+    # df_fields = get_full_df_fields(all_recordings)
+    # df_units = get_full_df_units(all_recordings)
+    # link_df_units_and_df_fields_with_common_unit(df_units, df_fields)
+    #
+    # df_fields.to_pickle(os.path.join(fpath, Params.analysis_path, 'df_fields.p'))
+    # df_units.to_pickle(os.path.join(fpath, Params.analysis_path, 'df_units.p'))
+    #
+    # with open(os.path.join(fpath, 'Analysis', 'all_recordings.p'), 'wb') as pfile:
+    #     pickle.dump(all_recordings, pfile)
+
+    # Use this instead if data has already been loaded once
+    with open(os.path.join(fpath, 'Analysis', 'all_recordings.p'), 'rb') as pfile:
+        all_recordings = pickle.load(pfile)
+
+    df_units = pd.read_pickle(os.path.join(fpath, 'Analysis', 'df_units.p'))
+    df_fields = pd.read_pickle(os.path.join(fpath, 'Analysis', 'df_fields.p'))
 
     # Compute and write figures
 
-    ExampleUnit.write(fpath, all_recordings, df_units, prefix='Figure_1_')
-    FieldDetectionMethod.write(fpath, all_recordings, df_units, prefix='Figure_1_sup_2_')
-    # IntraTrialCorrelations.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_1_sup_3_')
-    PlaceCellAndFieldCounts.write(fpath, df_units, df_fields, prefix='Figure_2AB_')
-    FieldsPerCellAcrossEnvironmentsSimple.write(fpath, df_units, df_fields, prefix='Figure_2C_')
-    Remapping.write(fpath, all_recordings, prefix='Figure_2_sup_1_')
-    environment_field_density_model_parameters = \
-        FieldsDetectedAcrossEnvironments.write(fpath, df_units, df_fields, prefix='Figure_2E_')
-    ConservationOfFieldFormationPropensity.write(fpath, df_units, df_fields,
-                                                 environment_field_density_model_parameters, prefix='Figure_2_sup_2_')
-    gamma_model_fit = \
-        FieldsPerCellAcrossEnvironments.write(fpath, df_units, df_fields, environment_field_density_model_parameters,
-                                              prefix='Figure_2_sup_3_')
-    PlaceCellsDetectedAcrossEnvironments.write(fpath, df_units, df_fields,
-                                               environment_field_density_model_parameters, gamma_model_fit,
-                                               prefix='Figure_2D_')
+    # ExampleUnit.write(fpath, all_recordings, df_units, prefix='Figure_1_')
+    # FieldDetectionMethod.write(fpath, all_recordings, df_units, prefix='Figure_1_sup_2_')
+    # # IntraTrialCorrelations.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_1_sup_3_')
+    # PlaceCellAndFieldCounts.write(fpath, df_units, df_fields, prefix='Figure_2AB_')
+    # FieldsPerCellAcrossEnvironmentsSimple.write(fpath, df_units, df_fields, prefix='Figure_2C_')
+    # Remapping.write(fpath, all_recordings, prefix='Figure_2_sup_1_')
+    # environment_field_density_model_parameters = \
+    #     FieldsDetectedAcrossEnvironments.write(fpath, df_units, df_fields, prefix='Figure_2E_')
+    # ConservationOfFieldFormationPropensity.write(fpath, df_units, df_fields,
+    #                                              environment_field_density_model_parameters, prefix='Figure_2_sup_2_')
+    # gamma_model_fit = \
+    #     FieldsPerCellAcrossEnvironments.write(fpath, df_units, df_fields, environment_field_density_model_parameters,
+    #                                           prefix='Figure_2_sup_3_')
+    # PlaceCellsDetectedAcrossEnvironments.write(fpath, df_units, df_fields,
+    #                                            environment_field_density_model_parameters, gamma_model_fit,
+    #                                            prefix='Figure_2D_')
     FieldDensity.write(fpath, df_units, df_fields, prefix='Figure_3A_')
     FieldSize.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3B_')
     FieldWidth.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3CD_')
-    AverageActivity.write(fpath, all_recordings, prefix='Figure_4AB_')
-    FiringRateDistribution.write(fpath, all_recordings, prefix='Figure_4C_')
+    # AverageActivity.write(fpath, all_recordings, prefix='Figure_4AB_')
+    # FiringRateDistribution.write(fpath, all_recordings, prefix='Figure_4C_')
     FieldAreaDistribution.write(fpath, df_units, df_fields, prefix='Figure_4D_')
-    FieldDensityByDwell.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_1_')
+    # FieldDensityByDwell.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_1_')
     FieldWidthAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_2_')
-    AverageActivityAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_4_sup_1_')
-    InterneuronMeanRate.write(fpath, all_recordings, prefix='Figure_4_sup_2_')
-    FiringRateChange.write(fpath, all_recordings, df_units, prefix='Figure_5AB_')
-    FiringRateChangeAll.write(fpath, all_recordings, prefix='Figure_5_sup_1_')
-    FiringRateChangeAndTheta.write(fpath, prefix='Figure_R1_')
-
-    print_field_count_per_cell_correlation_with_clustering_quality(df_units, df_fields)
+    # AverageActivityAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_4_sup_1_')
+    # InterneuronMeanRate.write(fpath, all_recordings, prefix='Figure_4_sup_2_')
+    # FiringRateChange.write(fpath, all_recordings, df_units, prefix='Figure_5AB_')
+    # FiringRateChangeAll.write(fpath, all_recordings, prefix='Figure_5_sup_1_')
+    # FiringRateChangeAndTheta.write(fpath, prefix='Figure_R1_')
+    #
+    # print_field_count_per_cell_correlation_with_clustering_quality(df_units, df_fields)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    # main(sys.argv[1])
+    fpath = "/home/jihoo/RawPlace/analysis_jh/Tanni/electrophysiology_analysis/Paper_ExpScales_NoPreProcessing/"
+    main(fpath)
