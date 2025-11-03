@@ -47,6 +47,7 @@ from barrylab_ephys_analysis.scripts.exp_scales.paper_methods import ValueByBinn
     BayesianPositionDecodingArenaAccuracy, compute_distances_to_landmarks, filter_dataframe_by_direction, \
     PlaceFieldPeakDistribution, PopulationVectorChangeRate
 
+from scipy import ndimage
 
 seaborn_font_scale = 1.5
 
@@ -2894,7 +2895,35 @@ class FieldSize(object):
     experiment_ids = ('exp_scales_a', 'exp_scales_b', 'exp_scales_c', 'exp_scales_d')
 
     @staticmethod
-    def get_harland_mainali_field_stats(fpath, df_units, df_fields, verbose=True):
+    def get_harland_mainali_field_count_per_cell_stats(fpath, df_units, df_fields, verbose=True):
+        if verbose:
+            print('Getting Harland/Mainali field count per cell stats')
+
+        analysis_dir = os.path.join(fpath, Params.analysis_path)
+        save_path = os.path.join(analysis_dir, 'harland_field_counts_per_active_cell.p')
+
+        # place cell filtering
+        df = df_fields.merge(df_units[['animal', 'animal_unit', 'category']].copy(deep=True),
+                             how='left', on=['animal', 'animal_unit'])
+        df = df[df['category'] == 'place_cell']
+
+        df_all_fields = df[['experiment_id', 'animal', 'animal_unit']].copy()
+        df_all_fields['environment'] = df_all_fields['experiment_id'].map(experiment_id_substitutes)
+        df_all_fields = df_all_fields[['environment', 'animal', 'animal_unit']]
+
+        # 4. (animal, unit, environment)별로 필드 개수를 셉니다.
+        #    groupby().size()는 1개 이상인 경우만 집계하므로, 0개인 세포는 자동으로 제외됩니다.
+        df_active_counts = df_all_fields.groupby(['environment', 'animal', 'animal_unit']).size().reset_index(name='number_of_fields')
+
+        df_active_counts.to_pickle(save_path)
+
+        if verbose:
+            print(f"  ... Saved field counts per active cell distribution to: {save_path}")
+
+        return df_active_counts
+
+    @staticmethod
+    def get_harland_mainali_field_size_stats(fpath, df_units, df_fields, verbose=True):
         if verbose:
             print('Getting Harland field stats (field area)')
 
@@ -4467,15 +4496,14 @@ def main(fpath):
     # PlaceCellsDetectedAcrossEnvironments.write(fpath, df_units, df_fields,
     #                                            environment_field_density_model_parameters, gamma_model_fit,
     #                                            prefix='Figure_2D_')
-    FieldDensity.write(fpath, df_units, df_fields, prefix='Figure_3A_')
-    FieldSize.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3B_')
-    FieldSize.get_harland_mainali_field_stats(fpath, df_units, df_fields)
-    FieldWidth.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3CD_')
+    # FieldDensity.write(fpath, df_units, df_fields, prefix='Figure_3A_')
+    # FieldSize.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3B_')
+    # FieldWidth.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3CD_')
     # AverageActivity.write(fpath, all_recordings, prefix='Figure_4AB_')
     # FiringRateDistribution.write(fpath, all_recordings, prefix='Figure_4C_')
-    FieldAreaDistribution.write(fpath, df_units, df_fields, prefix='Figure_4D_')
+    # FieldAreaDistribution.write(fpath, df_units, df_fields, prefix='Figure_4D_')
     # FieldDensityByDwell.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_1_')
-    FieldWidthAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_2_')
+    # FieldWidthAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3_sup_2_')
     # AverageActivityAll.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_4_sup_1_')
     # InterneuronMeanRate.write(fpath, all_recordings, prefix='Figure_4_sup_2_')
     # FiringRateChange.write(fpath, all_recordings, df_units, prefix='Figure_5AB_')
@@ -4483,6 +4511,9 @@ def main(fpath):
     # FiringRateChangeAndTheta.write(fpath, prefix='Figure_R1_')
     #
     # print_field_count_per_cell_correlation_with_clustering_quality(df_units, df_fields)
+
+    # FieldSize.get_harland_mainali_field_size_stats(fpath, df_units, df_fields)
+    FieldSize.get_harland_mainali_field_count_per_cell_stats(fpath, df_units, df_fields)
 
 
 if __name__ == '__main__':
