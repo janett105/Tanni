@@ -2894,6 +2894,35 @@ class FieldSize(object):
     experiment_ids = ('exp_scales_a', 'exp_scales_b', 'exp_scales_c', 'exp_scales_d')
 
     @staticmethod
+    def get_harland_mainali_field_stats(fpath, df_units, df_fields, verbose=True):
+        if verbose:
+            print('Getting Harland field stats (field area)')
+
+        analysis_dir = os.path.join(fpath, Params.analysis_path)
+        stats_save_path = os.path.join(analysis_dir, 'harland_field_size_mean.p')
+        all_fields_save_path = os.path.join(analysis_dir, 'harland_field_sizes.p')
+
+        # place cell filtering
+        df = df_fields.merge(df_units[['animal', 'animal_unit', 'category']].copy(deep=True),
+                             how='left', on=['animal', 'animal_unit'])
+        df = df[df['category'] == 'place_cell']
+
+        df_all_fields = df[['experiment_id', 'area']].copy()
+        df_all_fields['environment'] = df_all_fields['experiment_id'].map(experiment_id_substitutes)
+        df_all_fields = df_all_fields[['environment', 'area']]
+
+        df_stats = df_all_fields.groupby('environment')['area'].agg(['mean', 'count']).reset_index()
+
+        df_stats.to_pickle(stats_save_path)
+        df_all_fields.to_pickle(all_fields_save_path)
+
+        if verbose:
+            print(f"  ... Saved stats to: {stats_save_path}")
+            print(f"  ... Saved all fields distribution to: {all_fields_save_path}")
+
+        return df_stats, df_all_fields
+
+    @staticmethod
     def plot_field_size_by_distance_to_wall(all_recordings, df_units, df_fields, ax, stat_ax, verbose=False):
         """Plotted data:
         - field area
@@ -4440,6 +4469,7 @@ def main(fpath):
     #                                            prefix='Figure_2D_')
     FieldDensity.write(fpath, df_units, df_fields, prefix='Figure_3A_')
     FieldSize.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3B_')
+    FieldSize.get_harland_mainali_field_stats(fpath, df_units, df_fields)
     FieldWidth.write(fpath, all_recordings, df_units, df_fields, prefix='Figure_3CD_')
     # AverageActivity.write(fpath, all_recordings, prefix='Figure_4AB_')
     # FiringRateDistribution.write(fpath, all_recordings, prefix='Figure_4C_')
