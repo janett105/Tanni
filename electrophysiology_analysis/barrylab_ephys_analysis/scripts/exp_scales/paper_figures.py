@@ -2895,6 +2895,83 @@ class FieldSize(object):
     experiment_ids = ('exp_scales_a', 'exp_scales_b', 'exp_scales_c', 'exp_scales_d')
 
     @staticmethod
+    def _get_field_lengths_from_mask(mask, bin_size_cm):
+        lengths = []
+
+        # 1. 가로 슬라이스 (모든 행)
+        for i in range(mask.shape[0]):
+            row = mask[i, :]
+            labeled_array, num_features = ndimage.label(row)
+
+            if num_features > 0:
+                sizes = ndimage.sum(row, labeled_array, range(1, num_features + 1))
+                lengths.extend(sizes * bin_size_cm)
+
+        for j in range(mask.shape[1]):
+            col = mask[:, j]
+            labeled_array, num_features = ndimage.label(col)
+            if num_features > 0:
+                sizes = ndimage.sum(col, labeled_array, range(1, num_features + 1))
+                lengths.extend(sizes * bin_size_cm)
+
+        return lengths
+
+    @staticmethod
+    def get_harland_mainali_field_length_stats(fpath, all_recordings, df_units, df_fields, verbose=True):
+
+        if verbose:
+            print('Getting Harland/Mainali field length (1D slice) stats')
+
+        analysis_dir = os.path.join(fpath, Params.analysis_path)
+        save_path = os.path.join(analysis_dir, 'harland_field_lengths.p')
+
+        bin_size_cm = Params.spatial_ratemap['bin_size']
+
+        # place cell filtering
+        df = df_fields.merge(df_units[['animal', 'animal_unit', 'category']].copy(deep=True),
+                             how='left', on=['animal', 'animal_unit'])
+        df = df[df['category'] == 'place_cell']
+
+        all_lengths = []
+        all_environments = []
+
+        animal_recordings_map = {recs[0].info['animal']: recs for recs in all_recordings}
+
+        for _, field_row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing 1D slices"):
+            try:
+                animal = field_row['animal']
+                animal_field_index = field_row['animal_field']
+                experiment_id = field_row['experiment_id']
+
+                recordings = animal_recordings_map[animal]
+                field_ratemap = recordings[0].analysis['fields'][animal_field_index]['ratemap']
+
+                mask = ~np.isnan(field_ratemap)
+                lengths_cm = FieldSize._get_field_lengths_from_mask(mask, bin_size_cm)
+
+                all_lengths.extend(lengths_cm)
+                all_environments.extend([experiment_id_substitutes[experiment_id]] * len(lengths_cm))
+
+            except Exception as e:
+                if verbose:
+                    print(f"  Warning: Could not process field {field_row.get('animal_field', 'N/A')} "
+                          f"for animal {field_row.get('animal', 'N/A')}. Error: {e}")
+
+        df_all_lengths = pd.DataFrame({
+            'environment': all_environments,
+            'field_length_cm': all_lengths
+        })
+
+        df_all_lengths['field_length_m'] = df_all_lengths['field_length_cm'] / 100.0
+
+        df_all_lengths.to_pickle(save_path)
+
+        if verbose:
+            print(f"  ... Saved field length distribution to: {save_path}")
+
+        return df_all_lengths
+
+    @staticmethod
     def get_harland_mainali_field_count_per_cell_stats(fpath, df_units, df_fields, verbose=True):
         if verbose:
             print('Getting Harland/Mainali field count per cell stats')
@@ -4512,8 +4589,9 @@ def main(fpath):
     #
     # print_field_count_per_cell_correlation_with_clustering_quality(df_units, df_fields)
 
-    # FieldSize.get_harland_mainali_field_size_stats(fpath, df_units, df_fields)
+    FieldSize.get_harland_mainali_field_size_stats(fpath, df_units, df_fields)
     FieldSize.get_harland_mainali_field_count_per_cell_stats(fpath, df_units, df_fields)
+    FieldSize.get_harland_mainali_field_length_stats(fpath, all_recordings, df_units, df_fields)
 
 
 if __name__ == '__main__':
